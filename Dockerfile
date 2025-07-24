@@ -8,10 +8,8 @@ RUN apt-get update && apt-get install -y jq openssl curl \
 # Создаем директорию для сертификатов внутри контейнера
 RUN mkdir -p /etc/x-ui/certs
 
-# Копируем ваш готовый файл конфигурации X-UI (config.json)
-# config.json должен быть преднастроен с enableTls: true для нужных inbounds,
-# а пути к сертификатам и serverName будут перезаписаны скриптом.
-COPY ./config.json /etc/x-ui/config.json
+# *ВАЖНО:* Мы БОЛЬШЕ НЕ копируем config.json здесь.
+# Этим будет заниматься generate_and_configure_certs.sh
 
 # Копируем скрипт генерации и настройки сертификатов
 COPY generate_and_configure_certs.sh /usr/local/bin/generate_and_configure_certs.sh
@@ -19,8 +17,8 @@ COPY generate_and_configure_certs.sh /usr/local/bin/generate_and_configure_certs
 # Делаем скрипт исполняемым
 RUN chmod +x /usr/local/bin/generate_and_configure_certs.sh
 
-# Устанавливаем права доступа для файла конфигурации
-RUN chmod 644 /etc/x-ui/config.json
+# Права доступа для директории конфигов (важно для записи)
+RUN chmod 755 /etc/x-ui/
 
 # X-UI по умолчанию использует ENTRYPOINT ["/usr/local/x-ui/x-ui"].
 # Мы должны запустить наш скрипт ПЕРЕД запуском X-UI.
