@@ -1,0 +1,40 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  docker:
+    runs-on: self-hosted
+
+    #if: github.ref == 'refs/heads/docker'
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest
+
+      - name: Run app in background
+        run: |
+          sudo docker image prune -f
+          docker stop x-ui-neo 2>/dev/null || true
+          docker rm x-ui-neo 2>/dev/null || true
+
+          docker image rm $(docker images "${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo" --format "{{.Repository}}:{{.Tag}}" | grep -v latest) 2>/dev/null || true
+#          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest .
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest
+          docker run -d -p 2002:2002 --name x-ui-neo ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest
+    

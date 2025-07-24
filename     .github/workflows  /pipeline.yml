@@ -1,18 +1,16 @@
-name: Build and Push Docker Image
+name: Build and Push Docker Image X-UI-NEO
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main ] # Триггер при пуше в ветку main
 
 jobs:
   docker:
-    runs-on: self-hosted
+    runs-on: self-hosted # Используем self-hosted раннер
 
-    #if: github.ref == 'refs/heads/docker'
-    
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Получаем код репозитория
 
       - name: Log in to DockerHub
         uses: docker/login-action@v3
@@ -21,71 +19,32 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
+        id: docker_build # Добавляем ID для доступа к выходам действия
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest # Тег образа
 
-      - name: Run app in background
+      - name: Stop and remove existing container
         run: |
-          sudo docker image prune -f
-          docker stop current-time-container 2>/dev/null || true
-          docker rm current-time-container 2>/dev/null || true
+          # Останавливаем и удаляем контейнер, если он запущен
+          docker stop x-ui-neo 2>/dev/null || true
+          docker rm x-ui-neo 2>/dev/null || true
 
-          docker image rm $(docker images "${{ secrets.DOCKERHUB_USERNAME }}/current-time" --format "{{.Repository}}:{{.Tag}}" | grep -v latest) 2>/dev/null || true
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest .
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest
-          docker run -d -p 1001:1001 --name current-time-container ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest
-      
-
-
-  aws-ecr:
-    runs-on: self-hosted
-    if: github.ref == 'refs/heads/docker'
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-  
-          
-      - name: Login to Amazon ECR
+      - name: Clean up old images (optional, use with caution)
         run: |
-          aws ecr get-login-password --region eu-north-1 \
-            | docker login --username AWS --password-stdin 724560470499.dkr.ecr.eu-north-1.amazonaws.com
-      
-      - name: Build image for ECR
-        run: |
-          docker build -t 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest .
+          # Удаляем все образы с этим именем, кроме 'latest'
+          docker images "${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo" --format "{{.Repository}}:{{.Tag}}" | \
+          grep -v latest | xargs -r docker rmi 2>/dev/null || true
 
-      - name: Push image to ECR
+      - name: Run new X-UI container
         run: |
-          docker push 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
-
-      - name: Pull Docker Image
-        run: |
-          docker pull 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
-
-      - name: Run Docker Image
-        run: |
-          docker run -d -p 1001:2002 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
-
-          
-      #- name: Build and Push Docker image to ECR
-      #  uses: docker/build-push-action@v5
-      #   with:
-      #    context: .
-      #    push: true
-      #    tags: 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
+          docker run -d \
+            --name x-ui-neo \
+            --restart unless-stopped \ # Политика перезапуска контейнера
+            # Маппинг порта для веб-интерфейса (ВНЕШНИЙ_ХОСТ_ПОРТ:ВНУТРЕННИЙ_КОНТЕЙНЕР_ПОРТ)
+            -p 2002:54321 \
+            # Маппинг диапазона портов для VPN-трафика (ВНЕШНИЙ_ХОСТ_ДИАПАЗОН:ВНУТРЕННИЙ_КОНТЕЙНЕР_ДИАПАЗОН)
+            -p 2003-2025:2003-2025 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest
