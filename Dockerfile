@@ -1,29 +1,24 @@
-# Используем легковесный базовый образ Ubuntu
-FROM ubuntu:22.04
+# Используем официальный образ alireza7/x-ui как базовый
+FROM alireza7/x-ui:latest
 
-# Устанавливаем необходимые пакеты:
-RUN apt-get update && apt-get install -y \
-    apt-utils \
-    dialog \
-    jq \
-    openssl \
-    curl \
-    git \
-    nodejs \
-    npm \
-    --no-install-recommends \
+# Устанавливаем jq, openssl (для генерации сертификатов) и curl (для получения внешнего IP)
+# Если alireza7/x-ui основан на Alpine, используем apk. Если на Debian/Ubuntu, но apt-get не работает,
+# то, возможно, образ очень минималистичен.
+# Давайте попробуем установить через apt-get, если он все же есть и проблема была в чем-то другом.
+# Если снова будет exit code 127, значит apt-get либо нет, либо он работает не так.
+# В таком случае, придется использовать multi-stage build или найти другой x-ui образ.
+
+# Пробуем обычный apt-get install (если базовая ОС - Debian/Ubuntu)
+RUN apt-get update && apt-get install -y --no-install-recommends jq openssl curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем директорию для X-UI и сертификатов
-RUN mkdir -p /etc/x-ui/certs /usr/local/x-ui
+# Создаем директорию для сертификатов внутри контейнера
+RUN mkdir -p /etc/x-ui/certs
 
-# Клонируем репозиторий X-UI и устанавливаем зависимости
-WORKDIR /usr/local/x-ui
-# **** ИЗМЕНЕНА СТРОКА GIT CLONE ****
-RUN git clone https://github.com/MHSanaei/x-ui.git . \
-    && npm install --omit=dev
+# *ВАЖНО:* Мы БОЛЬШЕ НЕ копируем config.json здесь.
+# Этим будет заниматься generate_and_configure_certs.sh, если его нет.
 
-# Копируем наш скрипт генерации и настройки сертификатов
+# Копируем скрипт генерации и настройки сертификатов
 COPY generate_and_configure_certs.sh /usr/local/bin/generate_and_configure_certs.sh
 
 # Делаем скрипт исполняемым
@@ -32,8 +27,8 @@ RUN chmod +x /usr/local/bin/generate_and_configure_certs.sh
 # Права доступа для директории конфигов (важно для записи)
 RUN chmod 755 /etc/x-ui/
 
-# Устанавливаем ENTRYPOINT: сначала запускаем наш скрипт, затем X-UI
-ENTRYPOINT ["/bin/bash", "-c", "/usr/local/bin/generate_and_configure_certs.sh && node /usr/local/x-ui/bin/x-ui"]
+# Устанавливаем ENTRYPOINT: сначала запускаем наш скрипт, затем оригинальный X-UI
+ENTRYPOINT ["/bin/bash", "-c", "/usr/local/bin/generate_and_configure_certs.sh && /usr/local/x-ui/x-ui"]
 
 # Декларируем порты, которые будут использоваться ВНУТРИ контейнера
 # Внутренний порт веб-панели X-UI
