@@ -1,22 +1,18 @@
-# Используем официальный образ alireza7/x-ui как базовый
-FROM alireza7/x-ui:latest
+# Используем образ MHSanaei/x-ui с GitHub Container Registry как базовый
+# Он, вероятно, содержит необходимые утилиты или более подходящую среду.
+FROM ghcr.io/mhsanaei/x-ui:latest
 
-# Устанавливаем jq, openssl (для генерации сертификатов) и curl (для получения внешнего IP)
-# Если alireza7/x-ui основан на Alpine, используем apk. Если на Debian/Ubuntu, но apt-get не работает,
-# то, возможно, образ очень минималистичен.
-# Давайте попробуем установить через apt-get, если он все же есть и проблема была в чем-то другом.
-# Если снова будет exit code 127, значит apt-get либо нет, либо он работает не так.
-# В таком случае, придется использовать multi-stage build или найти другой x-ui образ.
-
-# Пробуем обычный apt-get install (если базовая ОС - Debian/Ubuntu)
+# Проверяем, установлены ли jq, openssl, curl. Если нет, пытаемся установить.
+# Использование apt-get update && apt-get install -y --no-install-recommends ...
+# может не потребоваться, если образ уже их содержит.
+# Если снова будет ошибка 127, значит, они уже есть или образ не на основе Debian/Ubuntu.
+# В этом случае, мы можем просто убрать эту RUN-строку.
+# Для первого раза оставим, чтобы проверить.
 RUN apt-get update && apt-get install -y --no-install-recommends jq openssl curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем директорию для сертификатов внутри контейнера
 RUN mkdir -p /etc/x-ui/certs
-
-# *ВАЖНО:* Мы БОЛЬШЕ НЕ копируем config.json здесь.
-# Этим будет заниматься generate_and_configure_certs.sh, если его нет.
 
 # Копируем скрипт генерации и настройки сертификатов
 COPY generate_and_configure_certs.sh /usr/local/bin/generate_and_configure_certs.sh
@@ -28,6 +24,7 @@ RUN chmod +x /usr/local/bin/generate_and_configure_certs.sh
 RUN chmod 755 /etc/x-ui/
 
 # Устанавливаем ENTRYPOINT: сначала запускаем наш скрипт, затем оригинальный X-UI
+# Предполагаем, что исполняемый файл X-UI находится по стандартному пути.
 ENTRYPOINT ["/bin/bash", "-c", "/usr/local/bin/generate_and_configure_certs.sh && /usr/local/x-ui/x-ui"]
 
 # Декларируем порты, которые будут использоваться ВНУТРИ контейнера
