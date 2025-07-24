@@ -28,5 +28,7 @@ RUN chmod 644 /etc/x-ui/config.json
 ENTRYPOINT ["/bin/bash", "-c", "/usr/local/bin/generate_and_configure_certs.sh && /usr/local/x-ui/x-ui"]
 
 # Декларируем порты, которые будут использоваться ВНУТРИ контейнера
-EXPOSE 54321 # Внутренний порт веб-панели X-UI
-EXPOSE 2003-2025 # Внутренние порты для VPN-трафика
+# Внутренний порт веб-панели X-UI
+EXPOSE 54321
+# Внутренние порты для VPN-трафика
+EXPOSE 2003-2025
