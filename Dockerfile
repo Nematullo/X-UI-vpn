@@ -1,15 +1,5 @@
-# Используем образ MHSanaei/x-ui с GitHub Container Registry как базовый
-# Он, вероятно, содержит необходимые утилиты или более подходящую среду.
-FROM ghcr.io/mhsanaei/x-ui:latest
-
-# Проверяем, установлены ли jq, openssl, curl. Если нет, пытаемся установить.
-# Использование apt-get update && apt-get install -y --no-install-recommends ...
-# может не потребоваться, если образ уже их содержит.
-# Если снова будет ошибка 127, значит, они уже есть или образ не на основе Debian/Ubuntu.
-# В этом случае, мы можем просто убрать эту RUN-строку.
-# Для первого раза оставим, чтобы проверить.
-RUN apt-get update && apt-get install -y --no-install-recommends jq openssl curl \
-    && rm -rf /var/lib/apt/lists/*
+# Используем образ MHSanaei/x-ui с Docker Hub
+FROM mhsanaei/x-ui:latest
 
 # Создаем директорию для сертификатов внутри контейнера
 RUN mkdir -p /etc/x-ui/certs
