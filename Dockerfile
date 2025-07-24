@@ -1,23 +1,32 @@
 # Используем официальный образ alireza7/x-ui как базовый
 FROM alireza7/x-ui:latest
 
-# Копируем сертификаты SSL/TLS в контейнер (если используете)
-# Предполагается, что у вас есть папка 'certs' в корне вашего репозитория
-# Пример:
-COPY ./certs/fullchain.pem /etc/x-ui/cert.pem
-COPY ./certs/privkey.pem /etc/x-ui/key.pem
+# Устанавливаем jq, openssl (для генерации сертификатов) и curl (для получения внешнего IP)
+RUN apt-get update && apt-get install -y jq openssl curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создаем директорию для сертификатов внутри контейнера
+RUN mkdir -p /etc/x-ui/certs
 
 # Копируем ваш готовый файл конфигурации X-UI (config.json)
-# config.json ДОЛЖЕН быть настроен на использование порта 54321 для веб-интерфейса
-# и на порты в диапазоне 2003-2025 для VPN-трафика
+# config.json должен быть преднастроен с enableTls: true для нужных inbounds,
+# а пути к сертификатам и serverName будут перезаписаны скриптом.
 COPY ./config.json /etc/x-ui/config.json
 
-# Устанавливаем права доступа для файлов конфигурации и сертификатов
-RUN chmod 644 /etc/x-ui/config.json \
-    && chmod 644 /etc/x-ui/cert.pem \
-    && chmod 600 /etc/x-ui/key.pem
+# Копируем скрипт генерации и настройки сертификатов
+COPY generate_and_configure_certs.sh /usr/local/bin/generate_and_configure_certs.sh
+
+# Делаем скрипт исполняемым
+RUN chmod +x /usr/local/bin/generate_and_configure_certs.sh
+
+# Устанавливаем права доступа для файла конфигурации
+RUN chmod 644 /etc/x-ui/config.json
+
+# X-UI по умолчанию использует ENTRYPOINT ["/usr/local/x-ui/x-ui"].
+# Мы должны запустить наш скрипт ПЕРЕД запуском X-UI.
+# Используем bash для запуска скрипта, а затем передаем управление оригинальной точке входа X-UI.
+ENTRYPOINT ["/bin/bash", "-c", "/usr/local/bin/generate_and_configure_certs.sh && /usr/local/x-ui/x-ui"]
 
 # Декларируем порты, которые будут использоваться ВНУТРИ контейнера
-# Это важно для документации образа и для некоторых инструментов сканирования
-EXPOSE 54321 # Внутренний порт веб-панели X-UI
+EXPOSE 54321    # Внутренний порт веб-панели X-UI
 EXPOSE 2003-2025 # Внутренние порты для VPN-трафика
