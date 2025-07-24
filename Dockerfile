@@ -2,9 +2,6 @@
 FROM ubuntu:22.04
 
 # Устанавливаем необходимые пакеты:
-# apt-utils, dialog - для стабильной работы apt-get
-# jq, openssl, curl - для нашего скрипта
-# git, nodejs, npm - для установки X-UI (панель X-UI написана на Node.js)
 RUN apt-get update && apt-get install -y \
     apt-utils \
     dialog \
@@ -22,7 +19,8 @@ RUN mkdir -p /etc/x-ui/certs /usr/local/x-ui
 
 # Клонируем репозиторий X-UI и устанавливаем зависимости
 WORKDIR /usr/local/x-ui
-RUN git clone https://github.com/alireza7/x-ui.git . \
+# **** ИЗМЕНЕНА СТРОКА GIT CLONE ****
+RUN git clone https://github.com/MHSanaei/x-ui.git . \
     && npm install --omit=dev
 
 # Копируем наш скрипт генерации и настройки сертификатов
