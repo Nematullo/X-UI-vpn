@@ -1,0 +1,91 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  docker:
+    runs-on: self-hosted
+
+    #if: github.ref == 'refs/heads/docker'
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest
+
+      - name: Run app in background
+        run: |
+          sudo docker image prune -f
+          docker stop current-time-container 2>/dev/null || true
+          docker rm current-time-container 2>/dev/null || true
+
+          docker image rm $(docker images "${{ secrets.DOCKERHUB_USERNAME }}/current-time" --format "{{.Repository}}:{{.Tag}}" | grep -v latest) 2>/dev/null || true
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest .
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest
+          docker run -d -p 1001:1001 --name current-time-container ${{ secrets.DOCKERHUB_USERNAME }}/current-time:latest
+      
+
+
+  aws-ecr:
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/docker'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+  
+          
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region eu-north-1 \
+            | docker login --username AWS --password-stdin 724560470499.dkr.ecr.eu-north-1.amazonaws.com
+      
+      - name: Build image for ECR
+        run: |
+          docker build -t 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest .
+
+      - name: Push image to ECR
+        run: |
+          docker push 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
+
+      - name: Pull Docker Image
+        run: |
+          docker pull 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
+
+      - name: Run Docker Image
+        run: |
+          docker run -d -p 1001:2002 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
+
+          
+      #- name: Build and Push Docker image to ECR
+      #  uses: docker/build-push-action@v5
+      #   with:
+      #    context: .
+      #    push: true
+      #    tags: 724560470499.dkr.ecr.eu-north-1.amazonaws.com/neo/neo:latest
