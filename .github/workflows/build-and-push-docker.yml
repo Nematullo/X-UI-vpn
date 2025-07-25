@@ -40,7 +40,7 @@ jobs:
 
   build-push-run-x-ui:
     runs-on: self-hosted
-    needs: [build-and-push-cert-generator, auto-configure-xui]
+    needs: [build-and-push-cert-generator]
     steps:
       # Получаем код репозитория
       - name: Checkout repo
