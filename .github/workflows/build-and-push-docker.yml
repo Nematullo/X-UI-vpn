@@ -40,7 +40,7 @@ jobs:
 
   build-push-run-x-ui:
     runs-on: self-hosted
-    needs: [build-and-push-cert-generator]
+    needs: [build-and-push-cert-generator, auto-configure-xui]
     steps:
       # Получаем код репозитория
       - name: Checkout repo
@@ -72,9 +72,11 @@ jobs:
       # Запускаем новый контейнер X-UI-NEO с монтированием volume сертификатов
       - name: Run new X-UI container
         run: |
+          mkdir -p neo-apps-data/x-ui
           docker run -d \
             --name x-ui-neo \
             --restart unless-stopped \
+            -v $(pwd)/neo-apps-data/x-ui/:/app/ \
             -v certs_volume:/certs \
             -p 2002:54321 \
             -p 2003-2025:2003-2025 \

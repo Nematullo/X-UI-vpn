@@ -1,0 +1,23 @@
+# Используем легковесный базовый образ, который включает bash
+FROM debian:stable-slim
+
+# Устанавливаем необходимые утилиты: sqlite3, jq, uuid-runtime (для uuidgen)
+RUN apt-get update && apt-get install -y \
+    sqlite3 \
+    jq \
+    uuid-runtime \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+# Создаем рабочую директорию внутри контейнера
+WORKDIR /app
+
+# Копируем скрипт в образ
+COPY conf-gen.sh .
+
+# Делаем скрипт исполняемым
+RUN chmod +x conf-gen.sh
+
+# Определяем команду, которая будет выполняться при запуске контейнера.
+# Скрипт будет принимать переменные окружения, такие как TARGET_EMAIL.
+CMD ["./conf-gen.sh"]
