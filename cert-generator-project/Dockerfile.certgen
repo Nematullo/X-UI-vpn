@@ -7,7 +7,7 @@ FROM alpine:latest
 # Обновляем список пакетов и устанавливаем OpenSSL.
 # После установки удаляем кэш пакетов, чтобы уменьшить размер образа.
 RUN apk update && \
-    apk add openssl && \
+    apk add openssl bash && \
     rm -rf /var/cache/apk/*
 
 # Устанавливаем рабочую директорию внутри контейнера.
