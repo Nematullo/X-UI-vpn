@@ -4,7 +4,6 @@ FROM alireza7/x-ui:latest
 RUN mkdir -p /certs
 
 COPY stabe-config/x-ui.db /etc/x-ui/x-ui.db
-#/app/x-ui.db
 
 
 EXPOSE 54321
