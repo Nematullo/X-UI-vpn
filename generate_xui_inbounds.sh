@@ -43,11 +43,12 @@ echo "Начинаем модификацию базы данных X-UI: $DB_PA
 
 # --- Шаг 1: Полностью очищаем таблицу 'inbounds' ---
 echo "Очистка таблицы 'inbounds'..."
+# Убедитесь, что контейнер X-UI остановлен перед запуском скрипта!
 sqlite3 "$DB_PATH" "DELETE FROM inbounds;"
 if [ $? -eq 0 ]; then
     echo "Таблица 'inbounds' успешно очищена."
 else
-    echo "Ошибка при очистке таблицы 'inbounds'. Проверьте права доступа или целостность БД." >&2
+    echo "Ошибка при очистке таблицы 'inbounds'. Убедитесь, что Docker-контейнер X-UI остановлен (docker stop x-ui-neo), затем попробуйте снова." >&2
     exit 1
 fi
 
@@ -70,13 +71,14 @@ for i in $(seq 0 11); do
     PROFILE_NAME="${CURRENT_MONTH_NAME} Профиль" # Например, "Январь Профиль"
 
     # Вычисляем expiry_time (Unix-таймстамп конца месяца)
-    # Получаем первый день текущего месяца, добавляем 1 месяц, вычитаем 1 секунду.
-    # Это дает последний момент последнего дня текущего месяца.
-    # Например, для i=0 (Январь), это будет 31 января 23:59:59 UTC текущего года.
-    EXPIRY_TIME=$(date -d "$(date +%Y)-$(printf "%02d" $((i+1)))-01 +1 month -1 second" +%s)
+    # Используем текущий системный год
+    CURRENT_YEAR=$(date +%Y)
+    # Формируем дату первого числа следующего месяца, затем отнимаем 1 секунду.
+    # Пример: для Января (i=0), вычисляем 2025-02-01 00:00:00, затем -1 секунда.
+    # Для Декабря (i=11), вычисляем 2026-01-01 00:00:00, затем -1 секунда.
+    EXPIRY_TIME=$(date -d "${CURRENT_YEAR}-$(printf "%02d" $((i+1)))-01 +1 month -1 second" +%s)
 
     # --- Формируем JSON-строки для различных настроек инбаунда с помощью 'here document' ---
-    # Переменные внутри <<EOF_JSON>> будут развернуты Bash'ем.
 
     # 1. JSON для настроек протокола VLESS (поле 'settings' в БД)
     VLESS_SETTINGS_JSON=$(cat << EOF_VLESS_JSON
@@ -165,8 +167,6 @@ EOF_SNIFFING_JSON
     ESCAPED_SNIFFING_JSON=$(echo "$SNIFFING_JSON" | sed "s/'/''/g")
 
     # SQL INSERT запрос. Столбцы перечислены в порядке, соответствующем вашей БД.
-    # user_id теперь явно установлен в 1.
-    # expiry_time берется из вычисленной переменной EXPIRY_TIME.
     SQL_INSERT="
     INSERT INTO inbounds (
         user_id, up, down, total, remark, enable, expiry_time, listen, port, protocol, settings, stream_settings, tag, sniffing
