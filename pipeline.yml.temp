@@ -1,3 +1,11 @@
+            -v xui_data_volume:/etc/x-ui/ \
+
+
+
+
+
+
+
 name: Build and Push Docker Image 
 
 on:

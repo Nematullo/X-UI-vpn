@@ -76,7 +76,6 @@ jobs:
           docker run -d \
             --name x-ui-neo \
             --restart unless-stopped \
-            #-v xui_data_volume:/etc/x-ui/ \
             -v certs_volume:/certs \
             -p 2002:54321 \
             -p 2003-2025:2003-2025 \
