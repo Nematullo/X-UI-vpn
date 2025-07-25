@@ -5,46 +5,77 @@ on:
     branches: [ main ] # Триггер при пуше в ветку main
 
 jobs:
-  docker:
-    runs-on: self-hosted # Используем self-hosted раннер
-
+  build-and-push-cert-generator:
+    runs-on: self-hosted
+    # if: false # <--- Раскомментируйте эту строку, чтобы пропустить job генерации сертификатов (например, если сертификаты уже сгенерированы и volume не нужно обновлять)
     steps:
+      # Получаем код репозитория
       - name: Checkout repo
-        uses: actions/checkout@v4 # Получаем код репозитория
-
+        uses: actions/checkout@v4
+      # Логинимся в DockerHub для возможности пуша образа (если нужно)
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Собираем образ генератора сертификатов
+      - name: Build Cert Generator Image
+        run: docker build -f cert-generator-project/Dockerfile.certgen -t cert-generator-image .
+      # (Опционально) пушим образ генератора сертификатов в DockerHub
+      - name: Push Cert Generator Image (опционально)
+        run: |
+          docker tag cert-generator-image ${{ secrets.DOCKERHUB_USERNAME }}/cert-generator-image:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/cert-generator-image:latest
+      # Создаём именованный Docker volume для хранения сертификатов (если ещё не создан)
+      - name: Create Docker Volume for Certs
+        run: docker volume create certs_volume || true
+      # Останавливаем и удаляем предыдущий контейнер генератора, если он был (чистый запуск)
+      - name: Stop and remove existing cert-generator container (if any)
+        run: |
+          docker stop cert-generator-temp 2>/dev/null || true
+          docker rm cert-generator-temp 2>/dev/null || true
+      # Запускаем контейнер генератора сертификатов, чтобы сгенерировать новые сертификаты во volume
+      - name: Run Cert Generator Container and Generate Certs
+        run: docker run --name cert-generator-temp --rm -v certs_volume:/certs cert-generator-image
 
-      - name: Build and push Docker image
-        id: docker_build # Добавляем ID для доступа к выходам действия
+  build-push-run-x-ui:
+    runs-on: self-hosted
+    needs: [build-and-push-cert-generator]
+    steps:
+      # Получаем код репозитория
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      # Логинимся в DockerHub для возможности пуша образа
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Собираем и пушим основной Docker-образ X-UI-NEO
+      - name: Build and push Docker image X-UI-NEO
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest # Тег образа
-
-      - name: Stop and remove existing container
+      # Останавливаем и удаляем предыдущий контейнер X-UI-NEO, если он был запущен
+      - name: Stop and remove existing X-UI-NEO container
         run: |
-          # Останавливаем и удаляем контейнер, если он запущен
           docker stop x-ui-neo 2>/dev/null || true
           docker rm x-ui-neo 2>/dev/null || true
-
-      - name: Clean up old images (optional, use with caution)
+      # (Опционально) чистим старые образы X-UI-NEO, кроме latest
+      - name: Clean up old X-UI-NEO images (optional, use with caution)
         run: |
-          # Удаляем все образы с этим именем, кроме 'latest'
           docker images "${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo" --format "{{.Repository}}:{{.Tag}}" | \
           grep -v latest | xargs -r docker rmi 2>/dev/null || true
-
+      # Запускаем новый контейнер X-UI-NEO с монтированием volume сертификатов
       - name: Run new X-UI container
         run: |
           docker run -d \
             --name x-ui-neo \
-            --restart unless-stopped \ # Политика перезапуска контейнера
-            # Маппинг порта для веб-интерфейса (ВНЕШНИЙ_ХОСТ_ПОРТ:ВНУТРЕННИЙ_КОНТЕЙНЕР_ПОРТ)
+            --restart unless-stopped \
+            -v certs_volume:/certs \
             -p 2002:54321 \
-            # Маппинг диапазона портов для VPN-трафика (ВНЕШНИЙ_ХОСТ_ДИАПАЗОН:ВНУТРЕННИЙ_КОНТЕЙНЕР_ДИАПАЗОН)
             -p 2003-2025:2003-2025 \
             ${{ secrets.DOCKERHUB_USERNAME }}/x-ui-neo:latest
